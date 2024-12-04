@@ -270,7 +270,7 @@ class DataExplorerDashboard:
                                              self.df[col].dropna().unique()],
                                     multi=True
                                 )
-                            ], style={'marginBottom': '10px'}) for col in self.df.columns if
+                            ], style={'marginBottom': '10px'}) for col in sorted(self.df.columns) if
                             self.df[col].nunique() > 1 and self.df[col].nunique() <= 10
                         ])
 
