@@ -173,7 +173,8 @@ class DataExplorerDashboard:
                         {'label': 'Scatter', 'value': 'scatter'},
                         {'label': 'Line', 'value': 'line'},
                         {'label': 'Bar', 'value': 'bar'},
-                        {'label': 'Boxplot', 'value': 'boxplot'}
+                        {'label': 'Boxplot', 'value': 'boxplot'},
+                        {'label': 'Histogram', 'value': 'histogram'}  # Added histogram
                     ],
                     value='scatter'
                 )
@@ -247,6 +248,18 @@ class DataExplorerDashboard:
                     value='None'
                 )
             ], id='aggregation-container', style={'width': '48%', 'display': 'none'}),
+            # Bin Selection (conditionally rendered)
+            html.Div([
+                html.Label('Number of Bins:'),
+                dcc.Input(
+                    id='histogram-bins-input',
+                    type='number',
+                    min=1,
+                    max=100,
+                    step=1,
+                    value=10
+                )
+            ], id='histogram-bins-container', style={'width': '48%', 'display': 'none'}),
 
             # Plot
             html.Div([
@@ -330,20 +343,24 @@ class DataExplorerDashboard:
         # Combined callback for plot updates and interaction
         @self.app.callback(
             Output('data-plot', 'figure', allow_duplicate=True),
-            [Input('plot-type-dropdown', 'value'),
-             Input('x-axis-dropdown', 'value'),
-             Input('y-axis-dropdown', 'value'),
-             Input('breakdown-dropdown', 'value'),
-             Input('datetime-resolution-dropdown', 'value'),
-             Input('aggregation-dropdown', 'value'),
-             Input('data-plot', 'clickData')] +
-            [Input(f'filter-{col}', 'value') for col in self.df.columns if self.df[col].nunique() > 1 and self.df[col].nunique() <= 10],  # Add inputs for filters
-            [State('data-plot', 'figure')],  # Ensure State is listed last
+            [
+                Input('plot-type-dropdown', 'value'),
+                Input('x-axis-dropdown', 'value'),
+                Input('y-axis-dropdown', 'value'),
+                Input('breakdown-dropdown', 'value'),
+                Input('datetime-resolution-dropdown', 'value'),
+                Input('aggregation-dropdown', 'value'),
+                Input('data-plot', 'clickData'),
+                Input('histogram-bins-input', 'value')  # Add bins input as a trigger
+            ] +
+            [Input(f'filter-{col}', 'value') for col in self.df.columns if
+             self.df[col].nunique() > 1 and self.df[col].nunique() <= 10],
+            [State('data-plot', 'figure')],
             prevent_initial_call=True
         )
         def update_plot_and_interaction(plot_type, x_column, y_column, breakdown_column,
-                                        datetime_resolution, aggregation_method,
-                                        clickData, *args):
+                                        datetime_resolution, aggregation_method, clickData,
+                                        bins, *args):
             """
             Dynamically generate plots based on user selections, filters, and handle trace visibility.
             """
@@ -368,7 +385,8 @@ class DataExplorerDashboard:
 
             # Plot generation logic
             if trigger_id in ['plot-type-dropdown', 'x-axis-dropdown', 'y-axis-dropdown',
-                              'breakdown-dropdown', 'datetime-resolution-dropdown', 'aggregation-dropdown'] + \
+                              'breakdown-dropdown', 'datetime-resolution-dropdown', 'aggregation-dropdown',
+                              'histogram-bins-input'] + \
                     [f'filter-{col}' for col in self.df.columns]:
                 # Handle datetime resolution if applicable
                 if x_column in self.datetime_cols:
@@ -407,6 +425,17 @@ class DataExplorerDashboard:
                         y=y_column,
                         color=breakdown_column
                     )
+                elif plot_type == 'histogram':
+                    fig = px.histogram(
+                        self.df,
+                        x=x_column,
+                        color=breakdown_column,  # Group histograms by breakdown column
+                        nbins=bins,
+                        histnorm='density',  # Normalize to density
+                        opacity=0.5,  # Set transparency for overlapping histograms
+                        barmode='overlay'  # Overlay histograms
+                    )
+
                 else:  # bar (grouped bar chart with error bars)
                     fig = px.bar(
                         grouped_df,
@@ -454,6 +483,18 @@ class DataExplorerDashboard:
                 return {'display': 'none'}, {'width': '48%', 'display': 'inline-block'}
             else:
                 return {'display': 'none'}, {'display': 'none'}
+
+        @self.app.callback(
+            Output('histogram-bins-container', 'style'),
+            [Input('plot-type-dropdown', 'value')]
+        )
+        def toggle_bins_input(plot_type):
+            """
+            Show or hide the bins input based on the selected plot type.
+            """
+            if plot_type == 'histogram':
+                return {'width': '48%', 'display': 'inline-block'}
+            return {'display': 'none'}
 
     def run(self, debug=True, port=8050):
         """
