@@ -1,12 +1,12 @@
+import json
+
 import dash
+import numpy as np
+import pandas as pd
+import plotly.express as px
 from dash import dcc
 from dash import html
 from dash.dependencies import Input, Output, State
-import plotly.express as px
-import plotly.graph_objs as go
-import pandas as pd
-import numpy as np
-import json
 
 
 class DataExplorerDashboard:
@@ -467,13 +467,13 @@ class DataExplorerDashboard:
 def main():
     # Create a sample DataFrame for demonstration
     np.random.seed(42)
-    df = {
+    df = pd.DataFrame({
         'Date': pd.date_range(start='2023-01-01', periods=100),
         'Sales': np.random.randint(100, 1000, 100),
         'Region': np.random.choice(['North', 'South', 'East', 'West'], 100),
         'Product': np.random.choice(['A', 'B', 'C'], 100),
         'Price': np.random.uniform(10, 100, 100)
-    }
+    })
     # replace '.' with '_' in column names
     df.columns = df.columns.str.replace('.', '_')
     # Initialize and run the dashboard
