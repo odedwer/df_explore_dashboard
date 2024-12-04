@@ -35,9 +35,9 @@ class DataExplorerDashboard:
         """
         Categorize columns by their data types for dynamic UI generation
         """
-        self.numeric_cols = list(self.df.select_dtypes(include=[np.number]).columns)
-        self.categorical_cols = list(self.df.select_dtypes(include=['object', 'category']).columns)
-        self.datetime_cols = list(self.df.select_dtypes(include=['datetime64']).columns)
+        self.numeric_cols = sorted(list(self.df.select_dtypes(include=[np.number]).columns))
+        self.categorical_cols = sorted(list(self.df.select_dtypes(include=['object', 'category']).columns))
+        self.datetime_cols = sorted(list(self.df.select_dtypes(include=['datetime64']).columns))
 
         # Additional categorization for datetime flexibility
         self.datetime_resolutions = {
@@ -186,7 +186,7 @@ class DataExplorerDashboard:
                     id='x-axis-dropdown',
                     options=[
                         {'label': col, 'value': col} for col in
-                        self.numeric_cols + self.categorical_cols + self.datetime_cols
+                        sorted(self.numeric_cols + self.categorical_cols + self.datetime_cols)
                     ],
                     value=self.numeric_cols[0] if self.numeric_cols else None
                 )
@@ -199,7 +199,7 @@ class DataExplorerDashboard:
                     id='y-axis-dropdown',
                     options=[
                         {'label': col, 'value': col} for col in
-                        self.numeric_cols + self.categorical_cols
+                        sorted(self.numeric_cols + self.categorical_cols)
                     ],
                     value=self.numeric_cols[1] if len(self.numeric_cols) > 1 else None
                 )
@@ -212,7 +212,7 @@ class DataExplorerDashboard:
                     id='breakdown-dropdown',
                     options=[
                         {'label': col, 'value': col} for col in
-                        self.categorical_cols
+                        sorted(self.categorical_cols)
                     ],
                     value=self.categorical_cols[0] if self.categorical_cols else None
                 )
@@ -270,7 +270,8 @@ class DataExplorerDashboard:
                                              self.df[col].dropna().unique()],
                                     multi=True
                                 )
-                            ], style={'marginBottom': '10px'}) for col in self.df.columns
+                            ], style={'marginBottom': '10px'}) for col in sorted(self.df.columns) if
+                            self.df[col].nunique() > 1 and self.df[col].nunique() <= 10
                         ])
 
                     ], style={
@@ -336,7 +337,8 @@ class DataExplorerDashboard:
              Input('datetime-resolution-dropdown', 'value'),
              Input('aggregation-dropdown', 'value'),
              Input('data-plot', 'clickData')] +
-            [Input(f'filter-{col}', 'value') for col in self.df.columns],  # Add inputs for filters
+            [Input(f'filter-{col}', 'value') for col in sorted(self.df.columns) if
+             self.df[col].nunique() > 1 and self.df[col].nunique() <= 10],  # Add inputs for filters
             [State('data-plot', 'figure')],  # Ensure State is listed last
             prevent_initial_call=True
         )
@@ -478,11 +480,10 @@ def main():
     df = pd.read_csv('StoryDBfullPublic_withTM.csv')
     df.drop(columns=['Unnamed: 0'], inplace=True)
     # replace '.' with '_' in column names
-    df.columns = df.columns.str.replace('.', '_')
+    df.columns = df.columns.str.replace('.', '_').str.lower()
     # Initialize and run the dashboard
     dashboard = DataExplorerDashboard(df)
     dashboard.run()
-
 
 if __name__ == '__main__':
     main()
