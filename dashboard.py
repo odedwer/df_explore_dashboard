@@ -377,7 +377,7 @@ class DataExplorerDashboard:
                     x_column = 'x_resolved'
 
                 # Handle categorical x-axis with aggregation
-                if x_column in self.categorical_cols and aggregation_method != "None":
+                if (x_column in self.categorical_cols or plot_type == "line") and aggregation_method != "None":
                     grouped = working_df.groupby([x_column, breakdown_column] if breakdown_column else [x_column])
                     agg_func = getattr(grouped[y_column], aggregation_method)
                     grouped_df = agg_func().reset_index()
@@ -440,15 +440,16 @@ class DataExplorerDashboard:
         @self.app.callback(
             [Output('datetime-resolution-container', 'style'),
              Output('aggregation-container', 'style')],
-            [Input('x-axis-dropdown', 'value')]
+            [Input('x-axis-dropdown', 'value'),
+             Input('plot-type-dropdown', 'value')]
         )
-        def toggle_datetime_resolution(x_column):
+        def toggle_datetime_resolution(x_column, plot_type):
             """
             Dynamically show/hide datetime resolution and aggregation dropdowns
             """
             if x_column in self.datetime_cols:
                 return {'width': '48%', 'display': 'inline-block'}, {'width': '48%', 'display': 'inline-block'}
-            elif x_column in self.categorical_cols:
+            elif x_column in self.categorical_cols or plot_type == 'line':
                 return {'display': 'none'}, {'width': '48%', 'display': 'inline-block'}
             else:
                 return {'display': 'none'}, {'display': 'none'}
@@ -467,13 +468,15 @@ class DataExplorerDashboard:
 def main():
     # Create a sample DataFrame for demonstration
     np.random.seed(42)
-    df = pd.DataFrame({
-        'Date': pd.date_range(start='2023-01-01', periods=100),
-        'Sales': np.random.randint(100, 1000, 100),
-        'Region': np.random.choice(['North', 'South', 'East', 'West'], 100),
-        'Product': np.random.choice(['A', 'B', 'C'], 100),
-        'Price': np.random.uniform(10, 100, 100)
-    })
+    # df = pd.DataFrame({
+    #     'Date': pd.date_range(start='2023-01-01', periods=100),
+    #     'Sales': np.random.randint(100, 1000, 100),
+    #     'Region': np.random.choice(['North', 'South', 'East', 'West'], 100),
+    #     'Product': np.random.choice(['A', 'B', 'C'], 100),
+    #     'Price': np.random.uniform(10, 100, 100)
+    # })
+    df = pd.read_csv('StoryDBfullPublic_withTM.csv')
+    df.drop(columns=['Unnamed: 0'], inplace=True)
     # replace '.' with '_' in column names
     df.columns = df.columns.str.replace('.', '_')
     # Initialize and run the dashboard
