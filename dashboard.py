@@ -1,8 +1,7 @@
 import json
-
+import pandas as pd
 import dash
 import numpy as np
-import pandas as pd
 import plotly.express as px
 from dash import dcc
 from dash import html
@@ -146,15 +145,16 @@ class DataExplorerDashboard:
                     'boxShadow': '0 4px 6px rgba(0,0,0,0.1)',
                     'position': 'relative'
                 })
-            ], id='description-modal-content', style={'display': 'none',
-                                                      'position': 'fixed',
-                                                      'zIndex': 1000,
-                                                      'left': 0,
-                                                      'top': 0,
-                                                      'width': '100%',
-                                                      'height': '100%',
-                                                      'overflow': 'auto',
-                                                      'backgroundColor': 'rgba(0,0,0,0.4)'}),
+            ], id='description-modal-content',
+                style={'display': 'none',
+                       'position': 'fixed',
+                       'zIndex': 1000,
+                       'left': 0,
+                       'top': 0,
+                       'width': '100%',
+                       'height': '100%',
+                       'overflow': 'auto',
+                       'backgroundColor': 'rgba(0,0,0,0.4)'}),
 
             # DataFrame Description Button
             html.Button('Show DataFrame Description',
@@ -316,15 +316,18 @@ class DataExplorerDashboard:
         )
         def toggle_modal(open_clicks, close_clicks, current_style):
             """
-            Toggle the visibility of the description modal
+            Toggle the visibility of the description modal.
             """
-            # Ensure proper initialization
+            # if the event is a State change, do nothing
+            ctx = dash.callback_context
+            trigger_id = ctx.triggered[0]['prop_id']
+            print(trigger_id)
             if open_clicks is None:
                 open_clicks = 0
             if close_clicks is None:
                 close_clicks = 0
 
-            # If open button is clicked more times than close button, show the modal
+            # Open the modal if open clicks > close clicks
             if open_clicks > close_clicks:
                 return {
                     'display': 'block',
@@ -496,6 +499,110 @@ class DataExplorerDashboard:
                 return {'width': '48%', 'display': 'inline-block'}
             return {'display': 'none'}
 
+        @self.app.callback(
+            Output('description-modal-content', 'children'),
+            [Input(f'filter-{col}', 'value') for col in self.df.columns if
+             self.df[col].nunique() > 1 and self.df[col].nunique() <= 10]
+        )
+        def update_description(*filter_values):
+            """
+            Update the content of the description modal based on applied filters.
+            """
+            # Initialize working DataFrame
+            working_df = self.df.copy()
+
+            # Apply filters
+            for col, values in zip(self.df.columns, filter_values):
+                if values:
+                    working_df = working_df[working_df[col].isin(values)]
+
+            # Generate a new description for the filtered DataFrame
+            filtered_description = {
+                "overall": {
+                    "total_rows": int(len(working_df)),
+                    "total_columns": int(len(working_df.columns))
+                },
+                "columns": {}
+            }
+
+            for col in working_df.columns:
+                col_info = {
+                    "dtype": str(working_df[col].dtype),
+                    "non_null_count": int(working_df[col].count()),
+                    "null_count": int(working_df[col].isnull().sum())
+                }
+
+                if pd.api.types.is_categorical_dtype(working_df[col]) or pd.api.types.is_object_dtype(working_df[col]):
+                    unique_values = working_df[col].unique().tolist()
+                    col_info["unique_values"] = unique_values[:10]
+                    col_info["total_unique_values"] = int(len(unique_values))
+                elif pd.api.types.is_numeric_dtype(working_df[col]):
+                    col_info.update({
+                        "min": float(working_df[col].min()),
+                        "max": float(working_df[col].max()),
+                        "mean": float(working_df[col].mean()),
+                        "median": float(working_df[col].median()),
+                        "std": float(working_df[col].std())
+                    })
+                elif pd.api.types.is_datetime64_any_dtype(working_df[col]):
+                    col_info.update({
+                        "min_date": str(working_df[col].min()),
+                        "max_date": str(working_df[col].max()),
+                        "date_range": str(working_df[col].max() - working_df[col].min())
+                    })
+
+                filtered_description["columns"][col] = col_info
+
+            # Generate new content for the modal
+            modal_content = [
+                html.Div([
+                    html.Div([
+                        html.H2('DataFrame Description', style={'display': 'inline-block', 'marginRight': '20px'}),
+                        html.Button('×', id='close-description-modal',
+                                    style={
+                                        'display': 'inline-block',
+                                        'float': 'right',
+                                        'fontSize': '24px',
+                                        'background': 'none',
+                                        'border': 'none',
+                                        'cursor': 'pointer'
+                                    })
+                    ], style={'borderBottom': '1px solid #ccc', 'marginBottom': '15px', 'paddingBottom': '10px'}),
+
+                    # Overall DataFrame Info
+                    html.Div([
+                        html.H3('Overall DataFrame'),
+                        html.P(f"Total Rows: {filtered_description['overall']['total_rows']}"),
+                        html.P(f"Total Columns: {filtered_description['overall']['total_columns']}")
+                    ]),
+
+                    # Scrollable Columns Description
+                    html.Div(
+                        [html.Div([
+                            html.H4(col),
+                            html.Pre(json.dumps(details, indent=2))
+                        ]) for col, details in filtered_description["columns"].items()],
+                        style={
+                            'maxHeight': '400px',
+                            'overflowY': 'scroll',
+                            'border': '1px solid #ccc',
+                            'padding': '10px',
+                            'backgroundColor': '#f9f9f9'
+                        }
+                    )
+                ], style={
+                    'backgroundColor': 'white',
+                    'padding': '20px',
+                    'borderRadius': '5px',
+                    'maxWidth': '800px',
+                    'margin': 'auto',
+                    'boxShadow': '0 4px 6px rgba(0,0,0,0.1)',
+                    'position': 'relative'
+                })
+            ]
+
+            return modal_content
+
     def run(self, debug=True, port=8050):
         """
         Run the Dash application
@@ -510,21 +617,19 @@ class DataExplorerDashboard:
 def main():
     # Create a sample DataFrame for demonstration
     np.random.seed(42)
-    # df = pd.DataFrame({
-    #     'Date': pd.date_range(start='2023-01-01', periods=100),
-    #     'Sales': np.random.randint(100, 1000, 100),
-    #     'Region': np.random.choice(['North', 'South', 'East', 'West'], 100),
-    #     'Product': np.random.choice(['A', 'B', 'C'], 100),
-    #     'Price': np.random.uniform(10, 100, 100)
-    # })
-    df = pd.read_csv('StoryDBfullPublic_withTM.csv')
-    df.drop(columns=['Unnamed: 0'], inplace=True)
+    df = pd.DataFrame({
+        'Date': pd.date_range(start='2023-01-01', periods=100),
+        'Sales': np.random.randint(100, 1000, 100),
+        'Region': np.random.choice(['North', 'South', 'East', 'West'], 100),
+        'Product': np.random.choice(['A', 'B', 'C'], 100),
+        'Price': np.random.uniform(10, 100, 100)
+    })
     # replace '.' with '_' in column names
     df.columns = df.columns.str.replace('.', '_')
-    # Initialize and run the dashboard
+    # calculate PCA on the data
+
     dashboard = DataExplorerDashboard(df)
     dashboard.run()
-
 
 if __name__ == '__main__':
     main()
